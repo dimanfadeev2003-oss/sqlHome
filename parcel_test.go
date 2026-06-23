@@ -34,36 +34,34 @@ func TestAddGetDelete(t *testing.T) {
 	// prepare
 	db, err := sql.Open("sqlite", "tracker.db")
 	require.NoError(t, err, "connection error")
+	defer db.Close()
 
 	store := NewParcelStore(db)
-	service := NewParcelService(store)
 	parcel := getTestParcel()
-	defer db.Close()
+
 	// add
 	// добавьте новую посылку в БД, убедитесь в отсутствии ошибки и наличии идентификатора
-	parc, err := service.Register(parcel.Client, parcel.Address)
+	id, err := store.Add(parcel)
 	require.NoError(t, err, "couldn't add parcel")
-	require.NotEmpty(t, parc.Number, "no id")
+	require.NotEmpty(t, id, "no id")
 
 	// get
 	// получите только что добавленную посылку, убедитесь в отсутствии ошибки
 	// проверьте, что значения всех полей в полученном объекте совпадают со значениями полей в переменной parcel
-	parcGet, err := store.GetByClient(parc.Client)
+	parcGet, err := store.Get(id)
 	require.NoError(t, err, "the client is missing")
 
-	for _, p := range parcGet {
-		assert.Equal(t, parcel.Address, p.Address)
-		assert.Equal(t, parcel.Client, p.Client)
-		assert.Equal(t, parcel.Status, p.Status)
-		assert.Equal(t, parcel.CreatedAt, p.CreatedAt)
-	}
+	assert.Equal(t, parcel.Address, parcGet.Address)
+	assert.Equal(t, parcel.Client, parcGet.Client)
+	assert.Equal(t, parcel.Status, parcGet.Status)
+	assert.Equal(t, parcel.CreatedAt, parcGet.CreatedAt)
 
 	// delete
 	// удалите добавленную посылку, убедитесь в отсутствии ошибки
 	// проверьте, что посылку больше нельзя получить из БД
-	err = store.Delete(parc.Number)
+	err = store.Delete(id)
 	require.NoError(t, err, "delete error")
-	_, err = store.Get(parc.Number)
+	_, err = store.Get(id)
 	require.Error(t, err, "the package has not been deleted")
 }
 
@@ -72,32 +70,29 @@ func TestSetAddress(t *testing.T) {
 	// prepare
 	db, err := sql.Open("sqlite", "tracker.db")
 	require.NoError(t, err, "connection error")
+	defer db.Close()
 
 	store := NewParcelStore(db)
-	service := NewParcelService(store)
 	parcel := getTestParcel()
-	defer db.Close()
 
 	// add
 	// добавьте новую посылку в БД, убедитесь в отсутствии ошибки и наличии идентификатора
-	parc, err := service.Register(parcel.Client, parcel.Address)
+	id, err := store.Add(parcel)
 	require.NoError(t, err, "couldn't add parcel")
-	require.NotEmpty(t, parc.Number, "no id")
+	require.NotEmpty(t, id, "no id")
 
 	// set address
 	// обновите адрес, убедитесь в отсутствии ошибки
 	newAddress := "new test address"
-	err = store.SetAddress(parc.Number, newAddress)
+	err = store.SetAddress(id, newAddress)
 	require.NoError(t, err, "error updating the address")
 
 	// check
 	// получите добавленную посылку и убедитесь, что адрес обновился
-	parcGet, err := store.GetByClient(parcel.Client)
+	parcGet, err := store.Get(id)
 	require.NoError(t, err, "the package is missing")
 
-	for _, p := range parcGet {
-		assert.Equal(t, newAddress, p.Address)
-	}
+	assert.Equal(t, newAddress, parcGet.Address)
 }
 
 // TestSetStatus проверяет обновление статуса
@@ -105,26 +100,25 @@ func TestSetStatus(t *testing.T) {
 	// prepare
 	db, err := sql.Open("sqlite", "tracker.db")
 	require.NoError(t, err, "connection error")
+	defer db.Close()
 
 	store := NewParcelStore(db)
-	service := NewParcelService(store)
 	parcel := getTestParcel()
-	defer db.Close()
 
 	// add
 	// добавьте новую посылку в БД, убедитесь в отсутствии ошибки и наличии идентификатора
-	parc, err := service.Register(parcel.Client, parcel.Address)
+	id, err := store.Add(parcel)
 	require.NoError(t, err, "couldn't add parcel")
-	require.NotEmpty(t, parc.Number, "no id")
+	require.NotEmpty(t, id, "no id")
 
 	// set status
 	// обновите статус, убедитесь в отсутствии ошибки
-	err = service.NextStatus(parc.Number)
+	err = store.SetStatus(id, ParcelStatusSent)
 	require.NoError(t, err, "status update error")
 
 	// check
 	// получите добавленную посылку и убедитесь, что статус обновился
-	parcGet, err := store.Get(parc.Number)
+	parcGet, err := store.Get(id)
 	require.NoError(t, err, "the package is missing")
 	assert.Equal(t, ParcelStatusSent, parcGet.Status)
 }
@@ -134,9 +128,9 @@ func TestGetByClient(t *testing.T) {
 	// prepare
 	db, err := sql.Open("sqlite", "tracker.db")
 	require.NoError(t, err, "connection error")
+	defer db.Close()
 
 	store := NewParcelStore(db)
-	defer db.Close()
 
 	parcels := []Parcel{
 		getTestParcel(),
